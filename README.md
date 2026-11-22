@@ -22,7 +22,7 @@ Every save-file change makes a backup first, in `www/save/editor-backups`.
 
 ## Requirements
 
-- Fear & Hunger 2: Termina (the Steam version; other copies work if you point the tool at the folder, see below).
+- Fear & Hunger 2: Termina 1.9.1 version as of November 2026, not sure if it works in the case this game were to get updated in the near future 
 - [Node.js](https://nodejs.org) 18 or newer. The LTS download is fine. Nothing else needs installing.
 
 ## Getting started (Windows)
