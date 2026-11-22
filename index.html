@@ -1,0 +1,716 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Termina Save Editor</title>
+<style>
+  :root { --bg:#141210; --panel:#1e1b18; --line:#3a332c; --text:#e8e0d4; --dim:#9a8f80; --accent:#c0392b; --ok:#5a9e5a; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:14px/1.45 system-ui, Segoe UI, sans-serif; }
+  .layout { display: grid; grid-template-columns: minmax(0, 1fr) 400px; gap: 16px; max-width: 1440px; margin: 0 auto; padding: 0 16px; }
+  main { min-width: 0; padding: 20px 0 80px; }
+  /* Inventory: a full-height column that stays on screen while the rest of the page scrolls */
+  #invPanel { position: sticky; top: 0; height: calc(100vh - 58px); padding-top: 20px; display: flex; flex-direction: column; }
+  #invPanel section { flex: 1; min-height: 0; display: flex; flex-direction: column; margin-bottom: 0; }
+  #invPanel .addrow { margin-top: 0; }
+  .invList { flex: 1; min-height: 0; overflow-y: auto; margin-top: 8px; border-top: 1px solid var(--line); }
+  @media (max-width: 1000px) {
+    .layout { grid-template-columns: minmax(0, 1fr); }
+    #invPanel { position: static; height: auto; padding-top: 0; order: -1; }
+    .invList { max-height: 360px; }
+  }
+  h1 { font-size: 22px; margin: 0 0 4px; letter-spacing: .5px; }
+  h2 { font-size: 16px; margin: 0 0 10px; color: var(--dim); text-transform: uppercase; letter-spacing: 1px; }
+  .sub { color: var(--dim); font-size: 12px; margin-bottom: 18px; word-break: break-all; }
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px; margin-bottom: 16px; }
+  button { background:#2b2622; color:var(--text); border:1px solid var(--line); border-radius:5px; padding:6px 10px; cursor:pointer; font:inherit; }
+  button:hover { border-color: var(--dim); }
+  button.primary { background: var(--accent); border-color: var(--accent); font-weight: 600; }
+  button.small { padding: 2px 8px; font-size: 12px; }
+  input, select { background:#0f0d0c; color:var(--text); border:1px solid var(--line); border-radius:5px; padding:5px 7px; font:inherit; }
+  input[type=number] { width: 80px; }
+  .row { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+  .actor { border-top: 1px solid var(--line); padding-top: 12px; margin-top: 12px; }
+  .actor:first-of-type { border-top: 0; margin-top: 0; padding-top: 0; }
+  .grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 8px 14px; margin: 8px 0; }
+  .grid label { display:flex; justify-content:space-between; align-items:center; gap:8px; }
+  .hint { color: var(--dim); font-size: 12px; }
+  table { width:100%; border-collapse: collapse; }
+  td { padding: 4px 6px; border-bottom: 1px solid #2a2520; }
+  td.qty { width: 100px; } td.del { width: 40px; text-align: right; }
+  .tag { display:inline-flex; align-items:center; gap:6px; background:#2b2622; border:1px solid var(--line); border-radius: 14px; padding: 2px 4px 2px 10px; margin: 2px; }
+  .tag.removed { opacity: .4; text-decoration: line-through; }
+  .tag.added { border-color: #c9a227; color: #f0d77a; }
+  .tag.limb { border-color: #c0392b; background: #3a1d1a; }
+  .bar { position: fixed; left:0; right:0; bottom:0; background:#0f0d0cee; border-top:1px solid var(--line); padding: 10px 16px; }
+  .bar .row { max-width: 1408px; margin: 0 auto; justify-content: space-between; }
+  #status { color: var(--dim); }
+  #status.ok { color: var(--ok); } #status.err { color: #e06c5c; }
+  .tabs button.on { border-color: var(--accent); }
+  .addrow { margin-top: 10px; }
+  .addrow input[list] { flex: 1; min-width: 200px; }
+  #mapWrap { position: relative; width: 100%; border-radius: 6px; overflow: hidden; border: 1px solid var(--line); }
+  #mapImg { display: block; width: 100%; height: auto; }
+  #mapSvg { position: absolute; inset: 0; width: 100%; height: 100%; cursor: crosshair; }
+  #mapSvg .z { fill: #c0392b; stroke: #fff; stroke-width: 2; opacity: .85; }
+  #mapSvg .z.sewer { fill: #2ecc71; stroke: #0b3d1f; }
+  #mapSvg .z.hot { fill: #ffd34d; stroke: #fff; opacity: 1; }
+  #mapSvg .here { fill: none; stroke: #2e86de; stroke-width: 4; }
+  #mapSvg .poi { fill: none; stroke-width: 4; }
+  #mapSvg .poi-dot { stroke: #fff; stroke-width: 1.5; }
+  #mapSvg .poi.hot { stroke-width: 6; }
+  #mapLabel { position: absolute; pointer-events: none; background: #000d; color: #fff; font-size: 12px; line-height: 1.4; padding: 5px 9px; border-radius: 5px; transform: translate(-50%, calc(-100% - 14px)); max-width: 320px; width: max-content; display: none; z-index: 2; }
+  #mapLabel b { display: block; }
+  #mapLabel .sub { color: #ccc; }
+  #mapLabel hr { border: 0; border-top: 1px solid #555; margin: 4px 0; }
+  .legend-item { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+  .swatch { display: inline-block; width: 12px; height: 12px; border-radius: 50%; }
+  .roster { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
+  .mate { display: flex; gap: 10px; align-items: center; background: #2b2622; border: 1px solid var(--line); border-radius: 8px; padding: 8px; }
+  .mate .face { width: 64px; height: 64px; flex: none; border-radius: 6px; background-color: #000; background-repeat: no-repeat; background-size: 256px 128px; border: 2px solid var(--line); }
+  .mate .who { min-width: 0; }
+  .affinity { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 8px; }
+  .god { background: #2b2622; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
+  .god .top { display: flex; align-items: center; gap: 8px; }
+  .god .top b { flex: 1; }
+  .god .top button { width: 30px; padding: 4px 0; }
+  .god .lvl { min-width: 22px; text-align: center; font-weight: 700; font-size: 16px; }
+  .god .pips { display: flex; gap: 4px; margin: 6px 0 4px; }
+  .god .pip { flex: 1; height: 5px; border-radius: 3px; background: #3a332d; }
+  .god .pip.on { background: #c9a227; }
+  .god .next { font-size: 12px; color: var(--dim); }
+  .circles { display: grid; gap: 6px; }
+  .circle { display: flex; align-items: center; gap: 10px; background: #2b2622; border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; }
+  .circle .ring { width: 14px; height: 14px; border-radius: 50%; border: 3px solid; flex: none; }
+  .circle .what { flex: 1; min-width: 0; }
+  .circle .what b { display: block; }
+  .circle .what .hint { display: block; font-size: 12px; }
+  .circle .st { font-size: 13px; white-space: nowrap; }
+  .circle.drawn .st { color: var(--text); font-weight: 600; }
+  .circle:not(.drawn) .st { color: var(--dim); }
+  .mate .who b { display: block; }
+  .st { display: inline-block; font-size: 12px; padding: 1px 8px; border-radius: 10px; margin-top: 3px; border: 1px solid var(--line); }
+  .st.party { background: #1f3a1f; border-color: var(--ok); color: #9fdc9f; }
+  .st.waiting { background: #1d2c3f; border-color: #2e86de; color: #9cc7f3; }
+  .st.dead { background: #3a1d1a; border-color: #c0392b; color: #e8a59c; }
+  .st.stranger, .st.away { color: var(--dim); }
+  .mate.dead .face { filter: grayscale(1) brightness(.5); }
+  .mate.away .face, .mate.stranger .face { filter: grayscale(.7) brightness(.75); }
+  .pill { font-weight: 700; padding: 3px 12px; border-radius: 14px; border: 1px solid var(--line); }
+  .pill.live { background: #1f3a1f; border-color: var(--ok); color: #9fdc9f; }
+</style>
+</head>
+<body>
+<div class="layout">
+<main>
+  <h1>Termina Save Editor</h1>
+  <div class="sub" id="game"></div>
+
+  <section id="modeBox">
+    <div class="row"><span id="mode" class="pill">File mode</span><span class="hint" id="modeHint"></span></div>
+  </section>
+
+  <section>
+    <h2>Toggles</h2>
+    <label class="row"><input type="checkbox" id="cheatStamina" disabled> <strong>Unlimited stamina</strong>
+      <span class="hint">Run forever without the meter filling up. Stays on between launches until you untick it.</span></label>
+    <div class="hint" id="cheatHint" style="margin-top:6px">Needs the game running with the live plugin installed.</div>
+  </section>
+
+  <section id="fileBox">
+    <div class="row">
+      <label>Save slot <select id="slot"></select></label>
+      <button id="reload">Reload from disk</button>
+      <span class="hint">Edit at the title screen (or close the game), save here, then load the slot in-game.</span>
+    </div>
+  </section>
+
+  <section>
+    <h2>Map &amp; fast travel</h2>
+    <div class="hint" id="travelIntro" style="margin-bottom:8px"></div>
+    <div id="mapWrap">
+      <img id="mapImg" alt="Map of Prehevil" src="/img/map_prehevil.png" data-pic="map_prehevil">
+      <svg id="mapSvg" viewBox="0 0 816 624" preserveAspectRatio="none"></svg>
+      <div id="mapLabel"></div>
+    </div>
+    <div class="row" id="legend" style="margin-top:8px"></div>
+    <div class="hint" id="travelHint" style="margin-top:6px"></div>
+  </section>
+
+  <section>
+    <h2>Companions</h2>
+    <div id="roster" class="roster"></div>
+    <div class="hint" id="rosterHint" style="margin-top:6px"></div>
+  </section>
+
+  <section>
+    <h2>Party <span class="hint" id="partyCount" style="text-transform:none;letter-spacing:0"></span></h2>
+    <div class="hint" id="partyHint" style="margin-bottom:8px"></div>
+    <div id="actors"></div>
+    <datalist id="skillCatalog"></datalist>
+  </section>
+
+  <section>
+    <h2>Sigils learned</h2>
+    <div class="row" id="sigils"></div>
+    <div class="hint" style="margin-top:6px">Needed for drawing sigils at ritual circles. The game learns these when you pick up a skin bible, so adding a bible here also ticks its sigil.</div>
+  </section>
+
+  <section>
+    <h2>God affinity</h2>
+    <div id="affinity" class="affinity"></div>
+    <div class="hint" id="affinityHint" style="margin-top:6px">Goes up by 1 each time you draw a god's sigil on a ritual circle. At levels 1–3 the skill shrine offers that god's skills for Lesser souls. Hover a god to see everything it unlocks.</div>
+  </section>
+
+  <section>
+    <h2>Ritual circles</h2>
+    <div id="circles" class="circles"></div>
+    <div class="hint" id="circlesHint" style="margin-top:6px"></div>
+  </section>
+
+</main>
+
+<aside id="invPanel">
+  <section>
+    <h2>Inventory</h2>
+    <div class="row addrow">
+      <input list="catalog" id="addName" placeholder="Search your bag or find something to add…" autocomplete="off">
+      <datalist id="catalog"></datalist>
+      <input type="number" id="addQty" value="10" min="1" title="How many to add">
+      <button id="addBtn">Add</button>
+    </div>
+    <div class="row" id="quick" style="margin-top:8px"></div>
+    <div class="row tabs" id="tabs" style="margin-top:10px"></div>
+    <div class="invList"><table id="inv"></table></div>
+  </section>
+</aside>
+</div>
+
+<div class="bar"><div class="row">
+  <span id="status">Loading…</span>
+  <button class="primary" id="saveBtn">Save changes to file</button>
+</div></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const KINDS = { item: 'Items', weapon: 'Weapons', armor: 'Armor & accessories' };
+const QUICK = [
+  ['item', 75, 10], ['item', 77, 10], ['item', 78, 10], ['item', 204, 50],
+];
+const LIVE_URL = 'http://127.0.0.1:7778';
+let info, data, tab = 'item', dirty = false, live = false, catalogAll = [];
+
+// Talks to the termina_live plugin inside the running game. Returns null if the game isn't reachable.
+async function liveApi(p, opts = {}) {
+  try {
+    const r = await fetch(LIVE_URL + p, { ...opts, headers: { 'X-Termina-Editor': '1' } });
+    return await r.json();
+  } catch { return null; }
+}
+
+function setMode(isLive, hint) {
+  live = isLive;
+  $('#mode').textContent = isLive ? 'LIVE — editing the running game' : 'File mode — editing the save file';
+  $('#mode').className = 'pill' + (isLive ? ' live' : '');
+  $('#modeHint').textContent = hint;
+  $('#fileBox').style.display = isLive ? 'none' : '';
+  $('#saveBtn').textContent = isLive ? 'Apply to game now' : 'Save changes to file';
+}
+
+// Poll the game: switch to live mode when it's running with a save loaded, and keep values fresh.
+function renderCheats(cheats) {
+  const box = $('#cheatStamina');
+  box.disabled = !cheats;
+  if (cheats && document.activeElement !== box) box.checked = !!cheats.infiniteStamina;
+  $('#cheatHint').style.display = cheats ? 'none' : '';
+}
+
+async function setCheat(name, on) {
+  const r = await liveApi('/cheats', { method: 'POST', body: JSON.stringify({ [name]: on }) });
+  if (!r || !r.ok) return status('Could not reach the game', 'err');
+  renderCheats(r.cheats);
+  status(on ? 'Unlimited stamina ON' : 'Unlimited stamina OFF', 'ok');
+}
+
+// ---- map: legend markers + fast travel ----
+let zones = [], explored = [], travelKey = '', hot = null;
+let legend = { categories: [], pois: [] }, poiGroups = [], shownCats = new Set();
+const SNAP = 45;     // how close (map pixels) a click must be to an explored spot
+const POI_SNAP = 16; // legend markers win the hover when the pointer is this close
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+async function loadLegend() {
+  legend = await api('/api/legend');
+  let hidden = [];
+  try { hidden = JSON.parse(localStorage.getItem('termina_legend_hidden') || '[]'); } catch {}
+  shownCats = new Set(legend.categories.map(c => c.id).filter(id => !hidden.includes(id)));
+  // Several markers in the same building share one spot on the town map - show them as one.
+  const byKey = {};
+  for (const p of legend.pois) {
+    const k = `${p.category}:${p.px},${p.py}`;
+    (byKey[k] = byKey[k] || { kind: 'poi', category: p.category, px: p.px, py: p.py, zone: p.zone, items: [] }).items.push(p);
+  }
+  poiGroups = Object.values(byKey);
+  // Different kinds of circle in the same building: put them side by side instead of on top of each other.
+  const atSpot = {};
+  for (const g of poiGroups) (atSpot[g.px + ',' + g.py] = atSpot[g.px + ',' + g.py] || []).push(g);
+  for (const list of Object.values(atSpot)) list.forEach((g, i) => { g.px += Math.round((i - (list.length - 1) / 2) * 16); });
+  $('#legend').innerHTML = legend.categories.map(c => {
+    const n = legend.pois.filter(p => p.category === c.id).length;
+    return `<label class="legend-item tag" style="padding-right:10px"><input type="checkbox" data-cat="${c.id}" ${shownCats.has(c.id) ? 'checked' : ''}>
+      <span class="swatch" style="border:3px solid ${c.color}"></span>${esc(c.label)} <span class="hint">(${n})</span></label>`;
+  }).join('')
+    + `<span class="legend-item hint"><span class="swatch" style="background:#c0392b;border:2px solid #fff"></span>Travel spot</span>`
+    + `<span class="legend-item hint"><span class="swatch" style="background:#2ecc71;border:2px solid #0b3d1f"></span>Sewer travel spot</span>`
+    + `<span class="legend-item hint"><span class="swatch" style="border:3px solid #2e86de"></span>You are here</span>`;
+}
+$('#legend').addEventListener('change', e => {
+  const c = e.target.dataset.cat; if (!c) return;
+  e.target.checked ? shownCats.add(c) : shownCats.delete(c);
+  try { localStorage.setItem('termina_legend_hidden', JSON.stringify(legend.categories.map(c => c.id).filter(id => !shownCats.has(id)))); } catch {}
+  travelKey = ''; renderTravel(lastTravel);
+});
+
+const catOf = id => legend.categories.find(c => c.id === id) || { color: '#fff', label: id };
+const visibleGroups = () => poiGroups.filter(g => shownCats.has(g.category));
+
+function renderTravel(t) {
+  if (t) {
+    const legacy = new Set(t.legacyMaps), mine = new Set(t.zones);
+    const beenOn = new Set([...(t.maps || []), ...t.legacyMaps, t.currentMap]);
+    explored = zones.filter(z => (mine.has(z.zone) || legacy.has(z.map) || z.zone === t.current)
+      && (z.area !== 'sewer' || beenOn.has(z.map))); // sewer spots only once you've been down there
+    const pic = t.mapUpdate ? (t.mapMarkers ? 'map_prehevil4' : 'map_prehevil2') : (t.mapMarkers ? 'map_prehevil3' : 'map_prehevil');
+    if ($('#mapImg').dataset.pic !== pic) { $('#mapImg').src = `/img/${pic}.png`; $('#mapImg').dataset.pic = pic; }
+    $('#travelIntro').textContent = 'Red dots are areas you\'ve explored — click one (or near one) to travel there. You\'ll arrive on the street in that part of town. Hover any marker for details.';
+    $('#travelHint').textContent = t.blocked ? `Can't travel right now: ${t.blocked}.` : `${explored.length} travel spots unlocked.`;
+  } else {
+    explored = [];
+    $('#travelIntro').textContent = 'Hover a marker for details. Fast travel appears here when the game is running with a save loaded.';
+    $('#travelHint').textContent = '';
+  }
+  const hotId = hot && (hot.kind === 'poi' ? 'p' + hot.px + ',' + hot.py + hot.category : 'z' + hot.key);
+  const key = JSON.stringify([explored.map(z => z.key), t && t.current, t && t.currentMap, hotId, [...shownCats]]);
+  if (key === travelKey) return;
+  travelKey = key;
+  // "you are here": the sewer spot if you're standing in that sewer, otherwise the street one
+  const here = t && (zones.find(z => z.zone === t.current && z.map === t.currentMap)
+    || zones.find(z => z.zone === t.current && z.area === 'street') || zones.find(z => z.zone === t.current));
+  $('#mapSvg').innerHTML =
+    explored.map(z => { const h = hot && hot.kind === 'zone' && hot.key === z.key;
+      return `<circle class="z ${z.area === 'sewer' ? 'sewer' : ''} ${h ? 'hot' : ''}" cx="${z.px}" cy="${z.py}" r="${h ? 9 : 6}"/>`; }).join('')
+    + visibleGroups().map(g => { const c = catOf(g.category), h = hot === g;
+      return `<circle class="poi ${h ? 'hot' : ''}" stroke="${c.color}" cx="${g.px}" cy="${g.py}" r="${h ? 14 : 11}"/>`
+        + `<circle class="poi-dot" fill="${c.color}" cx="${g.px}" cy="${g.py}" r="3.5"/>`; }).join('')
+    + (here ? `<circle class="here" cx="${here.px}" cy="${here.py}" r="16"/>` : '');
+}
+
+function svgPoint(e) {
+  const r = $('#mapSvg').getBoundingClientRect();
+  return [(e.clientX - r.left) / r.width * 816, (e.clientY - r.top) / r.height * 624];
+}
+function nearest([x, y]) {
+  let best = null, bd = POI_SNAP;
+  for (const g of visibleGroups()) { const d = Math.hypot(g.px - x, g.py - y); if (d < bd) { bd = d; best = g; } }
+  if (best) return best;
+  bd = SNAP;
+  for (const z of explored) { const d = Math.hypot(z.px - x, z.py - y); if (d < bd) { bd = d; best = { kind: 'zone', ...z }; } }
+  return best;
+}
+// Where clicking something takes you: a zone itself, or the explored street spot by a marker's entrance.
+function travelTarget(h) {
+  if (!h) return null;
+  if (h.kind === 'zone') return h;
+  const exact = explored.find(z => z.zone === h.zone && z.area === 'street') || explored.find(z => z.zone === h.zone);
+  if (exact) return exact;
+  let best = null, bd = SNAP;
+  for (const z of explored) { const d = Math.hypot(z.px - h.px, z.py - h.py); if (d < bd) { bd = d; best = z; } }
+  return best;
+}
+function labelHtml(h) {
+  if (h.kind === 'zone') return `<b>${esc(h.name)}</b>${h.area === 'sewer' ? '<span class="sub" style="color:#7fe0a5">Underground — in the sewers</span><br>' : ''}<span class="sub">Click to travel here</span>`;
+  const c = catOf(h.category);
+  const reachable = !!travelTarget(h);
+  return `<b style="color:${c.color}">${esc(c.label)}${h.items.length > 1 ? ` ×${h.items.length}` : ''}</b>`
+    + h.items.map((p, i) => `${i ? '<hr>' : ''}<b>${esc(p.place)}</b>${p.note ? `<span class="sub" style="color:${c.color}">${esc(p.note)}</span><br>` : ''}<span class="sub">${esc(p.detail)}</span><br><span class="sub">${esc(p.entrance)}</span>`).join('')
+    + (lastTravel ? `<hr><span class="sub">${reachable ? 'Click to travel to the entrance' : "You haven't explored this area yet"}</span>` : '');
+}
+$('#mapSvg').addEventListener('mousemove', e => {
+  const h = nearest(svgPoint(e)), label = $('#mapLabel');
+  const same = h && hot && (h === hot || (h.kind === 'zone' && hot.kind === 'zone' && h.key === hot.key));
+  if (!same) { hot = h; travelKey = ''; renderTravel(lastTravel); }
+  if (!h) return label.style.display = 'none';
+  const r = $('#mapSvg').getBoundingClientRect();
+  label.innerHTML = labelHtml(h); label.style.display = 'block';
+  label.style.left = Math.min(Math.max(h.px / 816 * r.width, 120), r.width - 120) + 'px';
+  label.style.top = (h.py / 624 * r.height) + 'px';
+});
+$('#mapSvg').addEventListener('mouseleave', () => { hot = null; travelKey = ''; $('#mapLabel').style.display = 'none'; renderTravel(lastTravel); });
+$('#mapSvg').addEventListener('click', async e => {
+  const h = nearest(svgPoint(e));
+  if (!lastTravel) return status('Fast travel needs the game running with a save loaded', 'err');
+  if (!h) return status('Nothing explored near there', 'err');
+  const z = travelTarget(h);
+  if (!z) return status("You haven't explored that area yet", 'err');
+  const r = await liveApi('/travel', { method: 'POST', body: JSON.stringify({ zone: z.zone, map: z.map, x: z.x, y: z.y }) });
+  if (r && r.ok) status(`Travelling to ${z.name}…`, 'ok');
+  else status(`Can't travel: ${r ? r.error : 'game not reachable'}`, 'err');
+});
+
+let lastTravel = null;
+async function pollLive() {
+  const s = await liveApi('/state');
+  renderCheats(s && s.cheats);
+  lastTravel = s && !s.notInGame && s.travel ? s.travel : null;
+  renderTravel(lastTravel);
+  const ok = s && !s.notInGame && !s.error;
+  const hint = ok ? 'Changes apply instantly when you click Apply.' :
+    s && s.notInGame ? 'Game is running — load a save in-game to edit live.' :
+    'Game not detected (not running, or live plugin not installed — run install-live.bat).';
+  if (ok !== live) {
+    if (dirty && !confirm(ok ? 'Game detected. Switch to live mode and discard unsaved file edits?' : 'Lost the game. Discard unsaved live edits?')) return;
+    setMode(ok, hint); dirty = false;
+    if (ok) { data = s; render(); refreshRoster(); refreshCircles(); status('Connected to game'); } else load();
+  } else {
+    $('#modeHint').textContent = hint;
+    if (ok && !dirty && document.activeElement.tagName !== 'INPUT') { data = s; render(); }
+  }
+}
+
+const status = (msg, cls = '') => { const el = $('#status'); el.textContent = msg; el.className = cls; };
+const markDirty = () => { dirty = true; status('Unsaved changes'); };
+const nameOf = (kind, id) => (info.catalog[kind].find(x => x.id === id) || {}).name || '#' + id;
+
+async function api(url, opts) {
+  const r = await fetch(url, opts); const j = await r.json();
+  if (!r.ok) throw new Error(j.error || r.statusText); return j;
+}
+
+async function init() {
+  info = await api('/api/info');
+  zones = await api('/api/zones');
+  await loadLegend();
+  renderTravel(null);
+  $('#game').textContent = 'Game folder: ' + info.game;
+  $('#slot').innerHTML = info.slots.map(s => `<option value="${s.slot}">${s.slot} — saved ${new Date(s.modified).toLocaleString()}</option>`).join('');
+  if (!info.slots.length) return status('No save files found. Save in-game first.', 'err');
+  $('#tabs').innerHTML = Object.entries(KINDS).map(([k, v]) => `<button data-k="${k}">${v}</button>`).join('');
+  $('#tabs').onclick = e => { if (e.target.dataset.k) { tab = e.target.dataset.k; renderInv(); } };
+  $('#quick').innerHTML = QUICK.map(([k, id, n], i) => `<button data-i="${i}">+${n} ${nameOf(k, id)}</button>`).join('');
+  $('#quick').onclick = e => { const q = QUICK[e.target.dataset.i]; if (q) addItem(...q); };
+  $('#slot').onchange = load; $('#reload').onclick = load;
+  // One search over items, weapons, armor and accessories alike.
+  initSkills();
+  catalogAll = Object.keys(KINDS).flatMap(kind => info.catalog[kind].map(x => ({ ...x, kind, label: `${x.name} · ${x.type} #${x.id}` })));
+  $('#catalog').innerHTML = catalogAll.map(x => `<option value="${esc(x.label)}">${esc(x.desc.slice(0, 80))}</option>`).join('');
+  $('#addBtn').onclick = () => {
+    const v = $('#addName').value.trim().toLowerCase();
+    const hit = catalogAll.find(x => x.label.toLowerCase() === v)
+      || (() => { const same = catalogAll.filter(x => x.name.toLowerCase() === v); return same.length === 1 ? same[0] : null; })();
+    if (!hit) return status('Pick an entry from the suggestions first', 'err');
+    $('#addName').value = ''; addItem(hit.kind, hit.id, +$('#addQty').value || 1);
+    status(`Added ${+$('#addQty').value || 1} × ${hit.name} (${hit.type}) — unsaved`, 'ok');
+  };
+  $('#saveBtn').onclick = save;
+  $('#cheatStamina').onchange = e => setCheat('infiniteStamina', e.target.checked);
+  setMode(false, '');
+  await pollLive();
+  if (!live) await load();
+  setInterval(pollLive, 2000);
+  setInterval(() => { if (live) { refreshRoster(); refreshCircles(); } }, 5000);
+}
+
+async function load() {
+  if (live || !info.slots.length) return;
+  if (dirty && !confirm('Discard unsaved changes?')) return;
+  data = await api('/api/load?slot=' + $('#slot').value);
+  dirty = false; render(); status('Loaded ' + data.slot);
+}
+
+function addItem(kind, id, n) {
+  const inv = data.inventory[kind]; const row = inv.find(x => x.id === id);
+  if (row) row.qty += n; else inv.push({ id, qty: n, name: nameOf(kind, id) });
+  tab = kind; renderInv(); markDirty();
+  const sigil = kind === 'item' && info.sigils.find(g => g.items.includes(id));
+  const s = sigil && data.sigils.find(x => x.sw === sigil.sw);
+  if (s && !s.known) { s.known = true; renderSigils(); status(`Added — also learned the ${s.name} sigil (unsaved)`); }
+}
+
+function renderSigils() {
+  if (!data.sigils) data.sigils = []; // older live plugin without sigil support
+  if (!data.sigils.length) return $('#sigils').innerHTML = '<span class="hint">Restart the game to load the updated live plugin.</span>';
+  $('#sigils').innerHTML = data.sigils.map((s, i) =>
+    `<label class="tag" style="padding-right:10px"><input type="checkbox" data-sig="${i}" ${s.known ? 'checked' : ''}> ${s.name}</label>`).join('');
+}
+$('#sigils').addEventListener('change', e => {
+  const i = e.target.dataset.sig; if (i == null) return;
+  data.sigils[i].known = e.target.checked; markDirty();
+});
+
+// ---- companion roster ----
+const ROSTER_ORDER = { party: 0, waiting: 1, stranger: 2, away: 3, dead: 4 };
+let rosterKey = '';
+function renderRoster(list, note) {
+  $('#rosterHint').textContent = note || '';
+  if (!list) return;
+  const key = JSON.stringify(list);
+  if (key === rosterKey) return;
+  rosterKey = key;
+  const sorted = [...list].sort((a, b) => (b.main - a.main) || (ROSTER_ORDER[a.status] - ROSTER_ORDER[b.status]));
+  $('#roster').innerHTML = sorted.map(m => {
+    const col = m.faceIndex % 4, row = Math.floor(m.faceIndex / 4);
+    return `<div class="mate ${m.status}">
+      <div class="face" style="background-image:url('/img/faces/${encodeURIComponent(m.faceName)}.png');background-position:${-col * 64}px ${-row * 64}px"></div>
+      <div class="who"><b>${esc(m.name)}</b><span class="st ${m.status}">${esc(m.label)}</span></div></div>`;
+  }).join('');
+}
+async function refreshRoster() {
+  if (!live) return renderRoster(data && data.roster, 'From the save file.');
+  try { renderRoster(await api('/api/roster-live'), 'Live from the running game.'); }
+  catch (err) { renderRoster(null, "Couldn't read companions from the game: " + err.message + ' (restart the game if you just updated).'); }
+}
+
+function render() { renderActors(); renderSigils(); renderAffinity(); renderInv(); if (!live) { refreshRoster(); refreshCircles(); } }
+
+// ---- god affinity ----
+function renderAffinity() {
+  const box = $('#affinity'), def = info.affinity;
+  if (!data.affinity) return box.innerHTML = '<span class="hint">Restart the game to load the updated live plugin.</span>';
+  box.innerHTML = def.gods.map(g => {
+    const v = data.affinity[g.id] || 0, top = Math.max(...Object.keys(g.unlocks).map(Number), 0);
+    const next = Object.keys(g.unlocks).map(Number).filter(l => l > v).sort((a, b) => a - b)[0];
+    const all = Object.entries(g.unlocks).map(([l, s]) => `Level ${l}: ${s.join(', ')}`).join('\n');
+    return `<div class="god" title="${esc(all)}">
+      <div class="top"><b>${esc(g.name)}</b>
+        <button data-aff="${g.id}" data-d="-1" ${v <= 0 ? 'disabled' : ''}>−</button>
+        <span class="lvl">${v}</span>
+        <button data-aff="${g.id}" data-d="1" ${v >= 9 ? 'disabled' : ''}>+</button></div>
+      <div class="pips">${Array.from({ length: def.max }, (_, i) => `<span class="pip ${i < v ? 'on' : ''}"></span>`).join('')}</div>
+      <div class="next">${next ? `Level ${next} unlocks: ${esc(g.unlocks[next].join(', '))}` : v >= top && top ? 'Everything unlocked' : ''}</div>
+    </div>`;
+  }).join('');
+}
+$('#affinity').addEventListener('click', e => {
+  const id = e.target.dataset.aff; if (!id) return;
+  data.affinity[id] = Math.max(0, Math.min(9, (data.affinity[id] || 0) + +e.target.dataset.d));
+  renderAffinity(); markDirty();
+});
+
+// ---- ritual circles: what's drawn on each, and wiping a sigil so you can draw another ----
+let circleList = [], circleKey = '';
+const circleSlot = () => live ? 'live' : $('#slot').value;
+function renderCircles(list, note) {
+  $('#circlesHint').textContent = note || '';
+  if (!list) return;
+  const key = JSON.stringify(list);
+  if (key === circleKey) return;
+  circleKey = key; circleList = list;
+  const sorted = [...list].sort((a, b) => b.canReset - a.canReset);
+  $('#circles').innerHTML = sorted.map(c => {
+    const cat = catOf(c.category);
+    return `<div class="circle ${c.canReset ? 'drawn' : ''}">
+      <span class="ring" style="border-color:${cat.color}" title="${esc(cat.label)}"></span>
+      <div class="what"><b>${esc(c.place)}</b><span class="hint">${esc(cat.label.replace(/s$/, ''))} · ${esc(c.detail.split('. To get there')[0])}</span></div>
+      <span class="st">${esc(c.state)}</span>
+      ${c.canReset ? `<button data-reset="${esc(c.key)}">Reset</button>` : ''}
+    </div>`;
+  }).join('');
+}
+async function refreshCircles() {
+  if (!live && !(info && info.slots.length)) return;
+  try {
+    renderCircles(await api('/api/circles?slot=' + encodeURIComponent(circleSlot())),
+      (live ? 'Live from the running game.' : 'From the save file.') + ' Reset wipes the sigil so the circle is blank again, and takes back the god affinity that drawing it gave you.');
+  } catch (err) { renderCircles(null, "Couldn't read the ritual circles: " + err.message + (live ? ' (restart the game if you just updated).' : '')); }
+}
+$('#circles').addEventListener('click', async e => {
+  const key = e.target.dataset.reset; if (!key) return;
+  const c = circleList.find(x => x.key === key);
+  if (!c || !confirm(`Wipe the ${c.state.replace(/ drawn$/, '')} from the circle at ${c.place}?` + (live ? '' : '\n\nThis changes the save file straight away (a backup is made first).'))) return;
+  try {
+    const r = await api('/api/circle-reset?slot=' + encodeURIComponent(circleSlot()), { method: 'POST', body: JSON.stringify({ key }) });
+    circleKey = ''; renderCircles(r.circles, $('#circlesHint').textContent);
+    status(`Circle at ${c.place} is blank again` + (r.backup ? ' (backup saved)' : ''), 'ok');
+  } catch (err) { status('Reset failed: ' + err.message, 'err'); }
+});
+
+function partyControls(a) {
+  const p = data.party;
+  if (!p || !p.members) return '';
+  const m = p.members.find(x => x.id === a.id);
+  if (!m) return '';
+  if (m.leader) return '<span class="hint">Main character</span>';
+  const hubs = p.hubs.filter(h => m.canGo.includes(h.id));
+  if (!hubs.length) return '<span class="hint">No rest spot available yet</span>';
+  return '<span class="hint">Send to wait at:</span>' + hubs.map(h =>
+    `<button class="small" data-act="hub" data-actor="${a.id}" data-hub="${h.id}" data-label="${esc(h.label)}">${esc(h.label)}</button>`).join('');
+}
+
+function renderActors() {
+  const p = data.party;
+  $('#partyCount').textContent = p && p.members ? `${p.members.length}/${p.max} members` : '';
+  $('#partyHint').textContent = data.live ? '' : 'Sending companions to the train or club works in live mode (game running with a save loaded).';
+  $('#actors').innerHTML = data.actors.map((a, ai) => `
+    <div class="actor">
+      <div class="row" style="justify-content:space-between">
+        <strong>${a.name} <span class="hint">(lvl ${a.level})</span></strong>
+        <span class="row">${partyControls(a)}</span>
+        <span class="row">
+          <button class="small" data-act="heal" data-a="${ai}">Full heal</button>
+          <button class="small" data-act="feed" data-a="${ai}">Max fullness</button>
+        </span>
+      </div>
+      <div class="grid">
+        <label>Body (HP) <input type="number" data-a="${ai}" data-f="hp" value="${a.hp}"></label>
+        <label>Mind (MP) <input type="number" data-a="${ai}" data-f="mp" value="${a.mp}"></label>
+        <label>Fullness <input type="number" data-a="${ai}" data-f="fullness" min="0" max="${data.fullnessMax}" value="${a.fullness}"></label>
+      </div>
+      <div class="hint">${data.live ? 'Max' : 'Base max'} Body ${a.baseMaxHp} / Mind ${a.baseMaxMp}${data.live ? '' : ' (gear can change this; the game caps HP/MP at the real max)'}. Fullness: 0 = starving, ${data.fullnessMax} = full.</div>
+      <div class="hint" style="margin-top:8px">Bonus stats (added on top of the character's base):</div>
+      <div class="grid">
+        ${data.paramNames.map((p, i) => `<label>${p} <input type="number" data-a="${ai}" data-p="${i}" value="${a.paramPlus[i] || 0}"></label>`).join('')}
+      </div>
+      <div class="hint">Status effects (click × to remove an injury or ailment — leave ones you don't recognise alone):</div>
+      <div>${(a.limbs || []).map((l, li) => {
+        const restoring = l.switches.every(s => (a.restoreLimbs || []).includes(s));
+        return `<span class="tag limb ${restoring ? 'removed' : ''}" title="Click × to restore the ${l.part}${l.name.includes('both') ? 's' : ''}">${l.name}
+          <button class="small" data-act="limb" data-a="${ai}" data-l="${li}">×</button></span>`;
+      }).join('')}${a.states.length ? a.states.map(s => {
+        const internal = !s.name || s.name.includes('_'); // game bookkeeping (e.g. easy_mode_buffs) - not safe to remove
+        return internal ? `<span class="tag" style="padding-right:10px" title="Used internally by the game">${s.name || '#' + s.id} <span class="hint">(internal)</span></span>`
+          : `<span class="tag ${(a.removeStates || []).includes(s.id) ? 'removed' : ''}">${s.name}
+          <button class="small" data-act="state" data-a="${ai}" data-s="${s.id}">×</button></span>`;
+      }).join('') : (a.limbs || []).length ? '' : '<span class="hint">none</span>'}</div>
+      <div class="hint" style="margin-top:8px">Skills (× to remove):</div>
+      <div>${(a.skills || []).map(s => `<span class="tag ${(a.removeSkills || []).includes(s.id) ? 'removed' : ''}">${esc(s.name)}
+          <button class="small" data-act="skill-rm" data-a="${ai}" data-s="${s.id}">×</button></span>`).join('')}${(a.addSkills || []).map(id =>
+          `<span class="tag added">+ ${esc((skillById[id] || {}).name || '#' + id)} <button class="small" data-act="skill-undo" data-a="${ai}" data-s="${id}">×</button></span>`).join('')}${!(a.skills || []).length && !(a.addSkills || []).length ? '<span class="hint">none</span>' : ''}</div>
+      ${a.skills ? `<div class="row" style="margin-top:6px">
+        <input list="skillCatalog" class="skillName" data-a="${ai}" placeholder="Add a skill, e.g. Spice forge…" autocomplete="off" style="flex:1;min-width:180px">
+        <button class="small" data-act="skill-add" data-a="${ai}">Add skill</button></div>` : '<div class="hint">Restart the game to load the updated live plugin.</div>'}
+    </div>`).join('');
+}
+
+// ---- skills ----
+let skillById = {}, skillGroups = {};
+function initSkills() {
+  skillById = Object.fromEntries((info.skills || []).map(s => [s.id, s]));
+  // Same-named copies (one per character) show once; the right copy is picked per character.
+  skillGroups = {};
+  for (const s of info.skills || []) {
+    const label = `${s.name} · ${s.type === 'Shrine skill' ? 'Shrine' : 'Other'}`;
+    (skillGroups[label] = skillGroups[label] || []).push(s);
+  }
+  $('#skillCatalog').innerHTML = Object.entries(skillGroups).map(([label, list]) => `<option value="${esc(label)}">${esc(list[0].desc.slice(0, 90))}</option>`).join('');
+}
+function pickSkill(text, actorId) {
+  const v = text.trim().toLowerCase();
+  const label = Object.keys(skillGroups).find(l => l.toLowerCase() === v)
+    || Object.keys(skillGroups).find(l => l.toLowerCase().startsWith(v + ' · '));
+  if (!label) return null;
+  const list = skillGroups[label];
+  return list.find(s => s.actors.includes(actorId)) || list.find(s => !s.actors.length) || list[0];
+}
+
+$('#actors').addEventListener('input', e => {
+  const t = e.target, a = data.actors[t.dataset.a]; if (!a || t.classList.contains('skillName')) return;
+  if (t.dataset.f) a[t.dataset.f] = +t.value;
+  if (t.dataset.p) a.paramPlus[t.dataset.p] = +t.value;
+  markDirty();
+});
+$('#actors').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && e.target.classList.contains('skillName')) document.querySelector(`[data-act="skill-add"][data-a="${e.target.dataset.a}"]`).click();
+});
+$('#actors').addEventListener('click', e => {
+  const t = e.target;
+  if (t.dataset.act === 'hub') return sendToHub(+t.dataset.actor, t.dataset.hub, t.dataset.label);
+  const a = data.actors[t.dataset.a]; if (!a || !t.dataset.act) return;
+  if (t.dataset.act === 'heal') { a.hp = a.baseMaxHp + 0; a.mp = a.baseMaxMp; }
+  if (t.dataset.act === 'feed') a.fullness = data.fullnessMax;
+  if (t.dataset.act === 'limb') {
+    const sw = a.limbs[t.dataset.l].switches, cur = a.restoreLimbs || [];
+    a.restoreLimbs = sw.every(s => cur.includes(s)) ? cur.filter(s => !sw.includes(s)) : [...new Set([...cur, ...sw])];
+  }
+  if (t.dataset.act === 'state') {
+    a.removeStates = a.removeStates || []; const id = +t.dataset.s;
+    a.removeStates = a.removeStates.includes(id) ? a.removeStates.filter(x => x !== id) : [...a.removeStates, id];
+  }
+  if (t.dataset.act === 'skill-rm') {
+    a.removeSkills = a.removeSkills || []; const id = +t.dataset.s;
+    a.removeSkills = a.removeSkills.includes(id) ? a.removeSkills.filter(x => x !== id) : [...a.removeSkills, id];
+  }
+  if (t.dataset.act === 'skill-undo') a.addSkills = (a.addSkills || []).filter(x => x !== +t.dataset.s);
+  if (t.dataset.act === 'skill-add') {
+    const box = document.querySelector(`.skillName[data-a="${t.dataset.a}"]`);
+    const sk = pickSkill(box.value, a.id);
+    if (!sk) return status('Pick a skill from the suggestions first', 'err');
+    const known = (a.skills || []).find(s => s.name === sk.name && !(a.removeSkills || []).includes(s.id));
+    if (known || (a.addSkills || []).includes(sk.id)) return status(`${a.name} already knows ${sk.name}`, 'err');
+    a.addSkills = [...(a.addSkills || []), sk.id];
+    a.removeSkills = (a.removeSkills || []).filter(x => x !== sk.id);
+    renderActors(); markDirty();
+    return status(`${a.name} will learn ${sk.name} — press ${live ? 'Apply to game now' : 'Save changes to file'} to keep it`, 'ok');
+  }
+  renderActors(); markDirty();
+});
+
+async function sendToHub(actor, hub, label) {
+  const name = (data.actors.find(a => a.id === actor) || {}).name || 'them';
+  if (dirty && !confirm('You have unapplied changes on this page. Send anyway? (Your other changes will be lost.)')) return;
+  if (!confirm(`Send ${name} to wait at the ${label}? You can pick them up there later, like normal.`)) return;
+  const r = await liveApi('/party', { method: 'POST', body: JSON.stringify({ actor, hub }) });
+  if (!r || !r.ok) return status(`Couldn't send ${name}: ${r ? r.error : 'game not reachable'}`, 'err');
+  data = r.data; dirty = false; render(); refreshRoster();
+  status(`${name} is now waiting at the ${label}.`, 'ok');
+}
+
+function renderInv() {
+  document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.k === tab));
+  renderInvRows();
+}
+// The bag list, narrowed by whatever is typed in the search box.
+// While searching, the bag list shows matches from every tab.
+function renderInvRows() {
+  const q = $('#addName').value.replace(/ · [^·]*#\d+$/, '').trim().toLowerCase();
+  const kinds = q ? Object.keys(KINDS) : [tab];
+  const shown = kinds.flatMap(k => data.inventory[k].map((r, i) => [r, i, k])).filter(([r]) => !q || r.name.toLowerCase().includes(q));
+  const typeName = (k, id) => { const c = info.catalog[k].find(x => x.id === id); return c ? c.type : ''; };
+  $('#inv').innerHTML = shown.length ? shown.map(([r, i, k]) => `<tr>
+      <td>${esc(r.name)} <span class="hint">${q && k !== 'item' ? esc(typeName(k, r.id)) + ' ' : ''}#${r.id}</span></td>
+      <td class="qty"><input type="number" min="0" data-k="${k}" data-i="${i}" value="${r.qty}"></td>
+      <td class="del"><button class="small" data-k="${k}" data-del="${i}">×</button></td></tr>`).join('')
+    : `<tr><td class="hint">${q ? `You don't have anything matching "${esc(q)}" — pick it from the suggestions and press Add.` : `No ${KINDS[tab].toLowerCase()} in the bag.`}</td></tr>`;
+}
+$('#addName').addEventListener('input', renderInvRows);
+$('#addName').addEventListener('keydown', e => { if (e.key === 'Enter') $('#addBtn').click(); });
+$('#inv').addEventListener('input', e => { const i = e.target.dataset.i; if (i != null) { data.inventory[e.target.dataset.k || tab][i].qty = +e.target.value; markDirty(); } });
+$('#inv').addEventListener('click', e => { const i = e.target.dataset.del; if (i != null) { data.inventory[e.target.dataset.k || tab].splice(i, 1); renderInv(); markDirty(); } });
+
+async function save() {
+  const edits = { inventory: {}, actors: data.actors.map(a => ({ id: a.id, hp: a.hp, mp: a.mp, fullness: a.fullness, paramPlus: a.paramPlus,
+    removeStates: a.removeStates || [], restoreLimbs: a.restoreLimbs || [],
+    addSkills: a.addSkills || [], removeSkills: a.removeSkills || [],
+    skillSwitches: (a.addSkills || []).flatMap(id => (skillById[id] || {}).switches || []) })) };
+  for (const k of Object.keys(KINDS)) edits.inventory[k] = Object.fromEntries(data.inventory[k].map(r => [r.id, r.qty]));
+  edits.sigils = Object.fromEntries(data.sigils.map(s => [s.sw, s.known]));
+  if (data.affinity) edits.affinity = data.affinity;
+  try {
+    if (live) {
+      const r = await liveApi('/apply', { method: 'POST', body: JSON.stringify(edits) });
+      if (!r || !r.ok) throw new Error(r ? r.error : 'game not reachable');
+      data = r.data; dirty = false; render();
+      return status('Applied in game! (Save in-game to keep it.)', 'ok');
+    }
+    status('Saving…');
+    const r = await api('/api/save?slot=' + data.slot, { method: 'POST', body: JSON.stringify(edits) });
+    data = r.data; dirty = false; render();
+    status('Saved! Backup of the old file: ' + r.backup.split(/[\\/]/).pop(), 'ok');
+  } catch (err) { status('Save failed: ' + err.message, 'err'); }
+}
+
+window.onbeforeunload = () => dirty ? true : undefined;
+init().catch(err => status(err.message, 'err'));
+</script>
+</body>
+</html>

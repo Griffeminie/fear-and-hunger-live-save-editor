@@ -1,0 +1,8 @@
+# Never commit game files or saves
+*.rpgsave
+editor-backups/
+www/
+node_modules/
+*.log
+.DS_Store
+Thumbs.db

@@ -1,0 +1,15 @@
+{
+  "name": "termina-save-editor",
+  "version": "1.0.0",
+  "description": "Save editor and live editor for Fear & Hunger 2: Termina (unofficial fan tool)",
+  "private": true,
+  "main": "editor.js",
+  "scripts": {
+    "start": "node editor.js",
+    "install-live": "node live-install.js install",
+    "uninstall-live": "node live-install.js uninstall"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
