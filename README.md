@@ -1,6 +1,6 @@
 # Termina Save Editor
 
-An unofficial save editor and live editor for **Fear & Hunger 2: Termina**, for when you want to experience the game without the stress and cause I can't find a proper cheat for this game for some reason
+An unofficial save editor and live editor for **Fear & Hunger 2: Termina**, made this cause I suck ass at the game and I can't cope with losing progress
 
 It runs as a small page in your browser. It can edit your save files, or, with the optional live plugin, change things in the running game instantly.
 
