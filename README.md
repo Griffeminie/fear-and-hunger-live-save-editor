@@ -77,3 +77,5 @@ The game runs through Proton, and the editor should work the same way, though th
 | `termina_live.js` | The in-game plugin for live mode |
 | `zones.js`, `pois.js`, `circles.js`, `roster.js`, `limbs.js`, `skills.js`, `affinity.js` | Work out map spots, ritual circles, companions, limbs, skills and affinity from the game data |
 | `find-game.js` | Finds the game folder |
+
+> Inspired by needles cause he bricked my fucking run 5 times in a row
