@@ -27,7 +27,7 @@ Every save-file change makes a backup first, in `www/save/editor-backups`.
 
 ## Getting started (Windows)
 
-1. Download this repository (**Code → Download ZIP**) and unzip it anywhere.
+1. Go to [**Releases**](https://github.com/Griffeminie/fear-and-hunger-live-save-editor/releases/latest), download **`termina-save-editor-<version>.zip`** and unzip it anywhere.
 2. Double-click **`start.bat`**. Your browser opens the editor at <http://127.0.0.1:7777>.
 3. Keep the black window open while you use the editor. Close it to stop.
 
